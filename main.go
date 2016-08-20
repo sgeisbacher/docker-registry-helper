@@ -7,6 +7,7 @@ import "log"
 import "encoding/json"
 import "strings"
 import "sort"
+import "flag"
 
 type ImageInfos struct {
 	Name string   `json:"name"`
@@ -14,7 +15,16 @@ type ImageInfos struct {
 }
 
 func main() {
-	resp, err := http.Get("https://docker-reg-01.local.netconomy.net:5000/v2/xis/hybris/tags/list")
+	var registry, imagePath, tagPrefix string
+	var latestOnly bool
+	flag.StringVar(&registry, "r", "docker-reg.example.org:5000", "host + port (optional) to docker-registry")
+	flag.StringVar(&imagePath, "i", "project/app", "image-path on registry")
+	flag.StringVar(&tagPrefix, "p", "SNAPSHOT", "tag-prefix")
+	flag.BoolVar(&latestOnly, "l", false, "print only latest tag-value")
+
+	flag.Parse()
+
+	resp, err := http.Get(fmt.Sprintf("https://%v/v2/%v/tags/list", registry, imagePath))
 	if err != nil {
 		log.Fatal(err)
 	} else {
@@ -27,15 +37,24 @@ func main() {
 		json.Unmarshal([]byte(body), &imageInfos)
 
 		var snapshotTags []string
-		fmt.Printf("Name: %v\n", imageInfos.Name)
+		if !latestOnly {
+			fmt.Printf("Name: %v\n", imageInfos.Name)
+		}
 		for _, tag := range imageInfos.Tags {
-			fmt.Printf("Tag: %v\n", tag)
-			if strings.HasPrefix(tag, "SNAPSHOT") {
+			if !latestOnly {
+				fmt.Printf("Tag: %v\n", tag)
+			}
+			if strings.HasPrefix(tag, tagPrefix) {
 				snapshotTags = append(snapshotTags, tag)
 			}
 		}
 		sort.Strings(snapshotTags)
-		fmt.Println("----")
-		fmt.Printf("latest: %v\n", snapshotTags[len(snapshotTags)-1])
+		latest := snapshotTags[len(snapshotTags)-1]
+		if !latestOnly {
+			fmt.Println("----")
+			fmt.Printf("latest: %v\n", latest)
+		} else {
+			fmt.Println(latest)
+		}
 	}
 }
